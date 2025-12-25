@@ -10,12 +10,12 @@ HFS.domOn('contextmenu', ev => {
     // Prevent the default browser context menu
     ev.preventDefault();
 
-    // Try to find the existing file menu button
-    const btn = row.querySelector('.file-menu-button');
+    // Priority 1: The standard file menu button (standard layout)
+    // Priority 2: The popup menu button (used for folders when 'File menu on link' is enabled)
+    const btn = row.querySelector('.file-menu-button') || row.querySelector('.popup-menu-button');
+
     if (btn) {
-        // Dispatch a synthetic click event to the button
-        // We use dispatchEvent to ensure React handles it, and we pass the coordinates
-        // so the menu opens at the cursor position (if the handler supports it, which openFileMenu does)
+        // We found a button that definitely toggles the menu. Click it.
         btn.dispatchEvent(new MouseEvent('click', {
             bubbles: true,
             cancelable: true,
@@ -26,13 +26,15 @@ HFS.domOn('contextmenu', ev => {
         return;
     }
 
-    // Fallback: If the button is not visible (e.g., 'file_menu_on_link' setting is active),
-    // clicking the file name/link itself might trigger the menu.
-    // However, if we click the link and it's NOT set to open the menu, it will navigate/download.
-    // We should check the state.
-    const state = HFS.state || {}; // Safe access
-    if (state.file_menu_on_link || (entry.isFolder && window.matchMedia && window.matchMedia('(hover: none)').matches)) {
-        const link = row.querySelector('.link-wrapper a') || row.querySelector('.link-wrapper .popup-menu-button');
+    // Fallback: No obvious menu button found.
+    // This typically happens for FILES when 'File menu on link' is enabled.
+    // In this mode, clicking the link itself opens the menu.
+    // IMPORTANT: For FOLDERS, the link still navigates, so we must NOT click the link for folders
+    // unless we are sure it opens the menu (which it doesn't in standard HFS logic).
+    // Luckily, HFS renders .popup-menu-button for folders in this mode, which we caught above.
+    // So here, we only proceed if it's NOT a folder.
+    if (!entry.isFolder) {
+        const link = row.querySelector('.link-wrapper a');
         if (link) {
             link.dispatchEvent(new MouseEvent('click', {
                 bubbles: true,
@@ -41,11 +43,6 @@ HFS.domOn('contextmenu', ev => {
                 clientY: ev.clientY,
                 view: window,
             }));
-            return;
         }
     }
-
-    // If we reach here, we couldn't trigger the menu. 
-    // We blocked the context menu, but essentially failed to open ours.
-    // We could try to force it, but without a dedicated API exposed, utilizing existing event handlers is the only way.
 });
